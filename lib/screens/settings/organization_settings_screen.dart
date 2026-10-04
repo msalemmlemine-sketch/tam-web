@@ -79,16 +79,17 @@ class _OrganizationSettingsScreenState extends State<OrganizationSettingsScreen>
   }
 
   Future<void> _pick() async {
-    final pck = await FilePicker.pickFiles(type: FileType.image, withData: true);
-    if (pck.isEmpty || pck.single.bytes == null) return;
+    final pck = await FilePicker.pickFiles(type: FileType.image);
+    if (pck.isEmpty) return;
     setState(() => _busy = true);
     try {
       final f = pck.single;
+      final bytes = await f.readAsBytes();
       final name = f.name;
       final dot = name.lastIndexOf('.');
       final ext = dot >= 0 ? name.substring(dot) : '.png';
-      await OrgLogo.save(f.bytes!, extension: ext);
-      if (mounted) setState(() { _logo = f.bytes; _busy = false; });
+      await OrgLogo.save(bytes, extension: ext);
+      if (mounted) setState(() { _logo = bytes; _busy = false; });
     } catch (e) {
       if (mounted) {
         setState(() => _busy = false);

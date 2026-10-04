@@ -16,10 +16,11 @@ class _MemberImportScreenState extends State<MemberImportScreen> {
   MemberImportResult? _result;
 
   Future<void> _pick() async {
-    final picked = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['csv'], withData: true);
-    if (picked.isEmpty || picked.single.bytes == null) return;
+    final picked = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['csv']);
+    if (picked.isEmpty) return;
     setState(() { _busy = true; _result = null; });
-    final result = await _importer.importBytes(picked.single.bytes!);
+    final bytes = await picked.single.readAsBytes();
+    final result = await _importer.importBytes(bytes);
     if (mounted) setState(() { _busy = false; _result = result; });
   }
 

@@ -26,16 +26,16 @@ class _ImportScreenState extends State<ImportScreen> {
     final picked = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['csv'],
-      withData: true,
     );
-    if (picked.isEmpty || picked.single.bytes == null) return;
+    if (picked.isEmpty) return;
 
     setState(() {
       _busy = true;
       _result = null;
       _manualOverrides.clear();
     });
-    final analysis = await _importer.analyzeBytes(picked.single.bytes!, fileName: picked.single.name);
+    final bytes = await picked.single.readAsBytes();
+    final analysis = await _importer.analyzeBytes(bytes, fileName: picked.single.name);
     setState(() {
       _analysis = analysis;
       _busy = false;
