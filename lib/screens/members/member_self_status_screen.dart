@@ -12,11 +12,9 @@ import '../../services/subscription_calculator.dart';
 import '../auth/change_password_screen.dart';
 import '../auth_gate.dart';
 
-/// شاشة "وضعيتي المالية" — الحساب الذاتي للمنتسب. للقراءة فقط:
-/// لا تعديل ولا تجميد ولا أرشفة ولا حذف، فقط عرض نفس الأرقام التي
-/// يراها الإداري في تفاصيل المنتسب (المستحق/المدفوع/المتبقي وسجل
-/// الدفعات)، لأن هذا الحساب أُنشئ آليًا بالدليل المالي وكلمة مرور
-/// هي رقم الهاتف (انظر UserRepository.ensureMemberAccount).
+/// شاشة "وضعيتي المالية" — الحساب الذاتي للمنتسب. للقراءة فقط.
+/// الحساب: بداية الاشتراك ثابتة 1-1-2026، والمبلغ الشهري 100،
+/// ويُحسب الشهر الحالي مقدمًا من يوم 1.
 class MemberSelfStatusScreen extends StatefulWidget {
   const MemberSelfStatusScreen({super.key});
 
@@ -29,6 +27,9 @@ class _MemberSelfStatusScreenState extends State<MemberSelfStatusScreen> {
   final _institutionRepo = InstitutionRepository();
   final _subRepo = SubscriptionRepository();
   static const _calculator = SubscriptionCalculator();
+
+  static const double _monthlyAmount = 100.0;
+  static final DateTime _subscriptionStart = DateTime(2026, 1, 1);
 
   late Future<_SelfData?> _future;
 
@@ -46,23 +47,18 @@ class _MemberSelfStatusScreenState extends State<MemberSelfStatusScreen> {
     final institution = await _institutionRepo.getById(member.institutionId);
     final payments = await _subRepo.paymentsForMember(memberId);
     final totalPaid = await _subRepo.totalSubscriptionPaidByMember(memberId);
-    final firstDateStr = await _subRepo.firstPaymentDate(memberId);
-    final settings = await _subRepo.getSettings();
-    final monthlyAmount = settings['monthly_amount'] ?? 0;
 
-    double totalDue = 0;
-    int months = 0;
-    if (firstDateStr != null) {
-      final firstDate = DateTime.parse(firstDateStr);
-      months = _calculator.monthsElapsed(
-        firstDueDate: DateTime(firstDate.year, firstDate.month, 1),
-        referenceDate: DateTime.now(),
-        statusDate: member.statusDate != null ? DateTime.parse(member.statusDate!) : null,
-        isActive: member.membershipStatus == 'active',
-      );
-      totalDue = _calculator.totalDue(monthsElapsed: months, monthlyAmount: monthlyAmount);
-    }
-    final remaining = _calculator.remainingBalance(totalDue: totalDue, totalPaid: totalPaid);
+    final months = _calculator.monthsElapsed(
+      firstDueDate: _subscriptionStart,
+      referenceDate: DateTime.now(),
+      statusDate:
+          member.statusDate != null ? DateTime.parse(member.statusDate!) : null,
+      isActive: member.membershipStatus == 'active',
+    );
+    final totalDue = _calculator.totalDue(
+        monthsElapsed: months, monthlyAmount: _monthlyAmount);
+    final remaining =
+        _calculator.remainingBalance(totalDue: totalDue, totalPaid: totalPaid);
 
     return _SelfData(
       member: member,
@@ -86,13 +82,15 @@ class _MemberSelfStatusScreenState extends State<MemberSelfStatusScreen> {
               final user = PermissionService.currentUser;
               if (value == 'password' && user != null) {
                 await Navigator.of(context).push(MaterialPageRoute(
-                  builder: (_) => ChangePasswordScreen(userId: user.id, isForced: false),
+                  builder: (_) =>
+                      ChangePasswordScreen(userId: user.id, isForced: false),
                 ));
               } else if (value == 'logout') {
                 await AuthService().logout();
                 if (context.mounted) {
                   Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(builder: (_) => const AuthGate()), (route) => false);
+                      MaterialPageRoute(builder: (_) => const AuthGate()),
+                      (route) => false);
                 }
               }
             },
@@ -106,25 +104,33 @@ class _MemberSelfStatusScreenState extends State<MemberSelfStatusScreen> {
       body: FutureBuilder<_SelfData?>(
         future: _future,
         builder: (context, snapshot) {
-          if (!snapshot.hasData && snapshot.connectionState != ConnectionState.done) {
+          if (!snapshot.hasData &&
+              snapshot.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
           }
           final data = snapshot.data;
           if (data == null) {
-            return const Center(child: Padding(
+            return const Center(
+                child: Padding(
               padding: EdgeInsets.all(24),
-              child: Text('تعذّر العثور على بيانات المنتسب المرتبطة بهذا الحساب.', textAlign: TextAlign.center),
+              child: Text('تعذّر العثور على بيانات المنتسب المرتبطة بهذا الحساب.',
+                  textAlign: TextAlign.center),
             ));
           }
           final m = data.member;
           return RefreshIndicator(
-            onRefresh: () async { final f = _load(); setState(() => _future = f); await f; },
+            onRefresh: () async {
+              final f = _load();
+              setState(() => _future = f);
+              await f;
+            },
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
                 Text(m.name, style: Theme.of(context).textTheme.headlineSmall),
                 const SizedBox(height: 4),
-                Text(data.institution?.name ?? '—', style: Theme.of(context).textTheme.bodyMedium),
+                Text(data.institution?.name ?? '—',
+                    style: Theme.of(context).textTheme.bodyMedium),
                 const SizedBox(height: 16),
                 Card(
                   child: Padding(
@@ -147,19 +153,26 @@ class _MemberSelfStatusScreenState extends State<MemberSelfStatusScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('حالة الاشتراك', style: Theme.of(context).textTheme.titleMedium),
+                        Text('حالة الاشتراك',
+                            style: Theme.of(context).textTheme.titleMedium),
                         const SizedBox(height: 8),
                         _row('الأشهر المستحقة', '${data.monthsElapsed}'),
-                        _row('إجمالي المستحق', '${data.totalDue.toStringAsFixed(0)} أوقية'),
-                        _row('إجمالي المدفوع', '${data.totalPaid.toStringAsFixed(0)} أوقية'),
-                        _row('المتبقي', '${data.remaining.toStringAsFixed(0)} أوقية',
-                            valueColor: data.remaining > 0 ? Colors.red.shade700 : Colors.green.shade700),
+                        _row('إجمالي المستحق',
+                            '${data.totalDue.toStringAsFixed(0)} أوقية'),
+                        _row('إجمالي المدفوع',
+                            '${data.totalPaid.toStringAsFixed(0)} أوقية'),
+                        _row('المتبقي',
+                            '${data.remaining.toStringAsFixed(0)} أوقية',
+                            valueColor: data.remaining > 0
+                                ? Colors.red.shade700
+                                : Colors.green.shade700),
                       ],
                     ),
                   ),
                 ),
                 const SizedBox(height: 12),
-                Text('سجل الدفعات', style: Theme.of(context).textTheme.titleMedium),
+                Text('سجل الدفعات',
+                    style: Theme.of(context).textTheme.titleMedium),
                 if (data.payments.isEmpty)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 12),
@@ -168,11 +181,14 @@ class _MemberSelfStatusScreenState extends State<MemberSelfStatusScreen> {
                 else
                   ...data.payments.map((p) => Card(
                         child: ListTile(
-                          title: Text('${p.subscriptionAmount.toStringAsFixed(0)} أوقية'),
+                          title: Text(
+                              '${p.subscriptionAmount.toStringAsFixed(0)} أوقية'),
                           subtitle: Text('سنة ${p.paymentYear}'
                               '${p.paymentMonth != null ? ' — شهر ${p.paymentMonth}' : ''}'
                               '${p.paymentDate != null ? ' — ${p.paymentDate}' : ''}'),
-                          trailing: p.directToExecutive ? const Chip(label: Text('مباشر للتنفيذي')) : null,
+                          trailing: p.directToExecutive
+                              ? const Chip(label: Text('مباشر للتنفيذي'))
+                              : null,
                         ),
                       )),
               ],
@@ -189,7 +205,8 @@ class _MemberSelfStatusScreenState extends State<MemberSelfStatusScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(label, style: const TextStyle(color: Colors.grey)),
-            Text(value, style: TextStyle(fontWeight: FontWeight.w600, color: valueColor)),
+            Text(value,
+                style: TextStyle(fontWeight: FontWeight.w600, color: valueColor)),
           ],
         ),
       );
