@@ -1,0 +1,14 @@
+# أيقونات نسخة الويب (PWA). ملف منفصل عمدًا وبهذا الاسم تحديدًا (وليس
+# flutter_launcher_icons-web.yaml) حتى لا تلتقطه أداة الأيقونات تلقائيًا في
+# بناء أندرويد — راجع التعليق في ios_launcher_icons.yaml.
+# يُستدعى صراحة فقط من .github/workflows/build-web.yml:
+#   dart run flutter_launcher_icons -f web_launcher_icons.yaml
+flutter_launcher_icons:
+  android: false
+  ios: false
+  image_path: "assets/icon.png"
+  web:
+    generate: true
+    image_path: "assets/icon.png"
+    background_color: "#FFFFFF"
+    theme_color: "#0D5344"

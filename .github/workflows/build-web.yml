@@ -1,0 +1,69 @@
+name: نشر نسخة الويب
+
+# يبني التطبيق كموقع ويب وينشره على GitHub Pages، فيُفتح من أي هاتف عبر
+# رابط واحد دون تثبيت. يعمل عند كل push إلى main، أو يدويًا من تبويب Actions.
+# تفعيل لمرة واحدة: Settings ← Pages ← Source: GitHub Actions
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: سحب الكود
+        uses: actions/checkout@v4
+
+      - name: تثبيت Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: توليد مجلد web (يطابق نسخة Flutter الحالية)
+        run: flutter create --platforms=web --org com.tam.mobile .
+
+      - name: flutter pub get
+        run: flutter pub get
+
+      - name: تجهيز SQLite للمتصفح (sqlite3.wasm)
+        run: dart run sqflite_common_ffi_web:setup
+
+      - name: توليد أيقونات الويب
+        run: dart run flutter_launcher_icons -f web_launcher_icons.yaml
+
+      - name: ضبط index.html وmanifest (عربي RTL)
+        run: python3 tools/configure_web.py
+
+      - name: بناء الويب (release)
+        # --base-href ضروري لأن GitHub Pages يخدم الموقع تحت /اسم-المستودع/
+        run: >
+          flutter build web --release
+          --base-href "/${{ github.event.repository.name }}/"
+          --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+
+      - name: رفع الموقع
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: نشر على GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
